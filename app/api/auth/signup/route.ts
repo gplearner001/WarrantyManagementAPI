@@ -38,10 +38,10 @@ export async function POST(req: NextRequest) {
     // Hash password
     const hashedPassword = await hash(validatedData.password, 12);
 
-    // Create user
+    // Create user with explicit UUID generation
     const result = await query<{ id: string }>(
-      `INSERT INTO users (name, email, password_hash)
-       VALUES ($1, $2, $3)
+      `INSERT INTO users (id, name, email, password_hash, created_at, updated_at)
+       VALUES (gen_random_uuid(), $1, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING id`,
       [validatedData.name, validatedData.email, hashedPassword]
     );
