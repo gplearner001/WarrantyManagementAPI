@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Link from 'next/link';
 
-export default function SignIn() {
+function SignInContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') || '/';
@@ -47,52 +47,60 @@ export default function SignIn() {
   };
 
   return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="email">Email</Label>
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          required
+          placeholder="Enter your email"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="password">Password</Label>
+        <Input
+          id="password"
+          name="password"
+          type="password"
+          required
+          placeholder="Enter your password"
+        />
+      </div>
+      {error && (
+        <div className="p-3 text-sm text-red-500 bg-red-50 rounded-md">
+          {error}
+        </div>
+      )}
+      <Button
+        type="submit"
+        className="w-full"
+        disabled={loading}
+      >
+        {loading ? 'Signing in...' : 'Sign In'}
+      </Button>
+      <p className="text-center text-sm text-gray-600">
+        Don't have an account?{' '}
+        <Link href="/auth/signup" className="text-blue-600 hover:underline">
+          Sign up
+        </Link>
+      </p>
+    </form>
+  );
+}
+
+export default function SignIn() {
+  return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="text-2xl text-center">Sign In</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                required
-                placeholder="Enter your email"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                required
-                placeholder="Enter your password"
-              />
-            </div>
-            {error && (
-              <div className="p-3 text-sm text-red-500 bg-red-50 rounded-md">
-                {error}
-              </div>
-            )}
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={loading}
-            >
-              {loading ? 'Signing in...' : 'Sign In'}
-            </Button>
-            <p className="text-center text-sm text-gray-600">
-              Don't have an account?{' '}
-              <Link href="/auth/signup" className="text-blue-600 hover:underline">
-                Sign up
-              </Link>
-            </p>
-          </form>
+          <Suspense fallback={<div>Loading...</div>}>
+            <SignInContent />
+          </Suspense>
         </CardContent>
       </Card>
     </div>

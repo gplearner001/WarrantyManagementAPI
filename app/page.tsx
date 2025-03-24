@@ -25,11 +25,7 @@ export default function Home() {
     const fetchWarranties = async () => {
       if (status === 'authenticated') {
         try {
-          const response = await fetch('/api/warranty', {
-            headers: {
-              'Authorization': `Bearer ${session?.accessToken}`
-            }
-          });
+          const response = await fetch('/api/warranty');
           
           if (response.ok) {
             const data = await response.json();

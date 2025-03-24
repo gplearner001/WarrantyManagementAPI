@@ -18,9 +18,6 @@ export default function TestPage() {
     try {
       const response = await fetch('/api/warranty', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session?.accessToken}`
-        },
         body: formData
       });
       
