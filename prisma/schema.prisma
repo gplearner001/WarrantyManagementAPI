@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  name         String
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+  
+  @@map("users")
+}
+
+model UserMapping {
+  id        String    @id @default(uuid()) @map("uuid") @db.Uuid
+  oauthId   String    @map("oauth_id")
+  userId    String    @map("user_id")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  warranties Warranty[]
+
+  @@map("user_mappings")
+  @@index([oauthId])
+}
+
+model Warranty {
+  id              String    @id @default(uuid()) @map("warranty_id") @db.Uuid
+  userMapping     UserMapping @relation(fields: [userId], references: [id])
+  userId          String    @map("user_id") @db.Uuid
+  productName     String    @map("product_name")
+  companyName     String    @map("company_name")
+  purchaseDate    DateTime  @map("purchase_date") @db.Date
+  expiryDate      DateTime  @map("expiry_date") @db.Date
+  additionalInfo  String?   @map("additional_info")
+  receiptImageUrl String    @map("receipt_image_url")
+  productImageUrl String    @map("product_image_url")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@map("warranties")
+}
