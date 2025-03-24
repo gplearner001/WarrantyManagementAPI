@@ -1,26 +1,31 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import logger from './logger';
 
 declare global {
+  // eslint-disable-next-line no-var
   var prisma: PrismaClient | undefined;
 }
 
-const prisma = global.prisma || new PrismaClient({
-  log: ['query', 'error', 'warn'].map(level => ({
-    emit: 'event',
-    level,
-  })),
-});
+const prismaOptions: Prisma.PrismaClientOptions = {
+  log: [
+    { level: 'query', emit: 'event' },
+    { level: 'error', emit: 'event' },
+    { level: 'warn', emit: 'event' }
+  ],
+};
 
-prisma.$on('query', (e: any) => {
+const prisma = global.prisma || new PrismaClient(prismaOptions);
+
+// Type-safe event handlers
+prisma.$on('query' as never, (e: Prisma.QueryEvent) => {
   logger.debug(e);
 });
 
-prisma.$on('error', (e: any) => {
+prisma.$on('error' as never, (e: Prisma.LogEvent) => {
   logger.error(e);
 });
 
-prisma.$on('warn', (e: any) => {
+prisma.$on('warn' as never, (e: Prisma.LogEvent) => {
   logger.warn(e);
 });
 
@@ -40,7 +45,9 @@ export async function query<T>(text: string, params?: any[]): Promise<T[]> {
   }
 }
 
-export async function transaction<T>(callback: (client: any) => Promise<T>): Promise<T> {
+export async function transaction<T>(
+  callback: (tx: Prisma.TransactionClient) => Promise<T>
+): Promise<T> {
   try {
     return await prisma.$transaction(async (tx) => {
       return await callback(tx);
