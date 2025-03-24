@@ -1,0 +1,189 @@
+{
+  "info": {
+    "name": "Warranty Management API",
+    "description": "Collection for testing the Warranty Management API endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Sign In",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"your_email@example.com\",\n    \"password\": \"your_password\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/signin",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "signin"]
+            },
+            "description": "Sign in to get access token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const response = pm.response.json();",
+                  "if (response.access_token) {",
+                  "    pm.environment.set('accessToken', response.access_token);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Warranties",
+      "item": [
+        {
+          "name": "Create Warranty",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "productName",
+                  "value": "Test Product",
+                  "type": "text"
+                },
+                {
+                  "key": "companyName",
+                  "value": "Test Company",
+                  "type": "text"
+                },
+                {
+                  "key": "purchaseDate",
+                  "value": "2024-03-21",
+                  "type": "text"
+                },
+                {
+                  "key": "expiryDate",
+                  "value": "2025-03-21",
+                  "type": "text"
+                },
+                {
+                  "key": "additionalInfo",
+                  "value": "Test product warranty",
+                  "type": "text"
+                },
+                {
+                  "key": "receiptImage",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "productImage",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/warranty",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "warranty"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const response = pm.response.json();",
+                  "if (response.warrantyId) {",
+                  "    pm.environment.set('warrantyId', response.warrantyId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get All Warranties",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/warranty",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "warranty"]
+            }
+          }
+        },
+        {
+          "name": "Get Warranty by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/warranty?warrantyId={{warrantyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "warranty"],
+              "query": [
+                {
+                  "key": "warrantyId",
+                  "value": "{{warrantyId}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [""]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [""]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ]
+}
