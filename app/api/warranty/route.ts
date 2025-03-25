@@ -27,17 +27,18 @@ export async function POST(req: NextRequest) {
 
     // First, get or create the user mapping
     let userMapping = await query<{ uuid: string }>(
-      'SELECT uuid FROM user_mappings WHERE oauth_id = $1',
+      'SELECT uuid FROM user_mappings WHERE oauth_id = $1::text',
       [token.sub]
     );
 
     let userUuid: string;
     if (userMapping.length === 0) {
-      // Create new user mapping
+      // Create new user mapping with proper UUID casting
       const newUuid = uuidv4();
+      const userId = uuidv4(); // Generate a new UUID for user_id
       await query(
-        'INSERT INTO user_mappings (uuid, oauth_id, user_id) VALUES ($1, $2, $3)',
-        [newUuid, token.sub, token.sub]
+        'INSERT INTO user_mappings (uuid, oauth_id, user_id) VALUES ($1::uuid, $2::text, $3::uuid)',
+        [newUuid, token.sub, userId]
       );
       userUuid = newUuid;
     } else {
@@ -70,13 +71,13 @@ export async function POST(req: NextRequest) {
 
     const warrantyId = uuidv4();
 
-    // Store warranty details in PostgreSQL
+    // Store warranty details in PostgreSQL with proper UUID casting
     await query(
       `INSERT INTO warranties (
         warranty_id, user_id, product_name, company_name, 
         purchase_date, expiry_date, additional_info, 
         receipt_image_url, product_image_url
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      ) VALUES ($1::uuid, $2::uuid, $3, $4, $5::date, $6::date, $7, $8, $9)`,
       [
         warrantyId,
         userUuid,
@@ -110,7 +111,7 @@ export async function GET(req: NextRequest) {
 
     // Get the user's UUID from the mapping table
     const userMapping = await query<{ uuid: string }>(
-      'SELECT uuid FROM user_mappings WHERE oauth_id = $1',
+      'SELECT uuid FROM user_mappings WHERE oauth_id = $1::text',
       [token.sub]
     );
 
@@ -123,12 +124,12 @@ export async function GET(req: NextRequest) {
 
     let queryText = `
       SELECT * FROM warranties 
-      WHERE user_id = $1
+      WHERE user_id = $1::uuid
     `;
     let queryParams = [userUuid];
 
     if (warrantyId) {
-      queryText += ' AND warranty_id = $2';
+      queryText += ' AND warranty_id = $2::uuid';
       queryParams.push(warrantyId);
     }
 
