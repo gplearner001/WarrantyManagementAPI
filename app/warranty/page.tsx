@@ -13,6 +13,20 @@ export default function WarrantyPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [files, setFiles] = useState<{
+    receiptImage?: File;
+    productImage?: File;
+  }>({});
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, files: inputFiles } = e.target;
+    if (inputFiles && inputFiles[0]) {
+      setFiles(prev => ({
+        ...prev,
+        [name]: inputFiles[0]
+      }));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -20,9 +34,18 @@ export default function WarrantyPage() {
     setSuccess(null);
     setLoading(true);
 
-    const formData = new FormData(e.currentTarget);
-
     try {
+      const formData = new FormData(e.currentTarget);
+      
+      // Validate files
+      if (!files.receiptImage || !files.productImage) {
+        throw new Error('Both receipt and product images are required');
+      }
+
+      // Ensure files are properly added to FormData
+      formData.set('receiptImage', files.receiptImage);
+      formData.set('productImage', files.productImage);
+
       const response = await fetch('/api/warranty', {
         method: 'POST',
         body: formData,
@@ -31,11 +54,12 @@ export default function WarrantyPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to create warranty');
+        throw new Error(data.error || data.details || 'Failed to create warranty');
       }
 
       setSuccess('Warranty created successfully!');
       e.currentTarget.reset();
+      setFiles({});
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
@@ -126,6 +150,7 @@ export default function WarrantyPage() {
                       type="file"
                       required
                       accept="image/*"
+                      onChange={handleFileChange}
                       className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
                     />
                     <FileText className="h-5 w-5 text-gray-500" />
@@ -141,6 +166,7 @@ export default function WarrantyPage() {
                       type="file"
                       required
                       accept="image/*"
+                      onChange={handleFileChange}
                       className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
                     />
                     <Upload className="h-5 w-5 text-gray-500" />

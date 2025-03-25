@@ -5,58 +5,138 @@ import { getToken } from 'next-auth/jwt';
 import { query } from '@/lib/db';
 import { v4 as uuidv4 } from 'uuid';
 
+// Add File type definition for environments where it might not be available
+interface CustomFile extends Blob {
+  readonly lastModified: number;
+  readonly name: string;
+  readonly webkitRelativePath: string;
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
+
 export async function POST(req: NextRequest) {
   try {
+    // Validate authentication
     const token = await getToken({ req });
     if (!token?.sub) {
+      logger.warn('Unauthorized attempt to create warranty');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const formData = await req.formData();
-    const productName = formData.get('productName') as string;
-    const companyName = formData.get('companyName') as string;
-    const purchaseDate = formData.get('purchaseDate') as string;
-    const expiryDate = formData.get('expiryDate') as string;
-    const additionalInfo = formData.get('additionalInfo') as string;
-    const receiptImage = formData.get('receiptImage') as File;
-    const productImage = formData.get('productImage') as File;
+    // Log the start of warranty creation
+    logger.info({ userId: token.sub }, 'Starting warranty creation process');
 
-    if (!productName || !companyName || !purchaseDate || !expiryDate || !receiptImage || !productImage) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    // Ensure the request has the correct content type
+    const contentType = req.headers.get('content-type') || '';
+    if (!contentType.includes('multipart/form-data')) {
+      logger.warn({ contentType }, 'Invalid content type received');
+      return NextResponse.json({ 
+        error: 'Invalid content type. Expected multipart/form-data' 
+      }, { status: 400 });
     }
 
-    // First, get or create the user mapping
-    let userMapping = await query<{ uuid: string }>(
-      'SELECT uuid FROM user_mappings WHERE oauth_id = $1::text',
-      [token.sub]
-    );
+    let formData: FormData;
+    try {
+      formData = await req.formData();
+      logger.debug('FormData parsed successfully');
+    } catch (error) {
+      logger.error({ error }, 'Failed to parse form data');
+      return NextResponse.json({ 
+        error: 'Failed to parse form data',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }, { status: 400 });
+    }
+
+    // Validate and extract form fields
+    const productName = formData.get('productName');
+    const companyName = formData.get('companyName');
+    const purchaseDate = formData.get('purchaseDate');
+    const expiryDate = formData.get('expiryDate');
+    const additionalInfo = formData.get('additionalInfo');
+    const receiptImage = formData.get('receiptImage') as CustomFile | null;
+    const productImage = formData.get('productImage') as CustomFile | null;
+
+    // Log received data (excluding file contents)
+    logger.debug({
+      productName,
+      companyName,
+      purchaseDate,
+      expiryDate,
+      hasReceiptImage: !!receiptImage,
+      hasProductImage: !!productImage
+    }, 'Received warranty creation data');
+
+    // Validate required fields
+    const validationErrors = [];
+    if (!productName || typeof productName !== 'string') validationErrors.push('Product name is required');
+    if (!companyName || typeof companyName !== 'string') validationErrors.push('Company name is required');
+    if (!purchaseDate || typeof purchaseDate !== 'string') validationErrors.push('Purchase date is required');
+    if (!expiryDate || typeof expiryDate !== 'string') validationErrors.push('Expiry date is required');
+    if (!receiptImage || !(receiptImage instanceof Blob)) validationErrors.push('Receipt image is required');
+    if (!productImage || !(productImage instanceof Blob)) validationErrors.push('Product image is required');
+
+    if (validationErrors.length > 0) {
+      logger.warn({ validationErrors }, 'Validation failed for warranty creation');
+      return NextResponse.json({ 
+        error: 'Validation failed',
+        details: validationErrors
+      }, { status: 400 });
+    }
+
+    // After validation, we know these are not null
+    const validReceiptImage = receiptImage as CustomFile;
+    const validProductImage = productImage as CustomFile;
+
+    // Get or create user mapping
+    let userMapping;
+    try {
+      userMapping = await query<{ uuid: string }>(
+        'SELECT uuid FROM user_mappings WHERE oauth_id = $1::text',
+        [token.sub]
+      );
+
+      logger.debug({ 
+        userMappingFound: userMapping.length > 0 
+      }, 'User mapping lookup complete');
+    } catch (error) {
+      logger.error({ error }, 'Failed to query user mapping');
+      throw error;
+    }
 
     let userUuid: string;
     if (userMapping.length === 0) {
-      // Create new user mapping with proper UUID casting
+      // Create new user mapping
       const newUuid = uuidv4();
-      const userId = uuidv4(); // Generate a new UUID for user_id
-      await query(
-        'INSERT INTO user_mappings (uuid, oauth_id, user_id) VALUES ($1::uuid, $2::text, $3::uuid)',
-        [newUuid, token.sub, userId]
-      );
-      userUuid = newUuid;
+      const userId = uuidv4();
+      try {
+        await query(
+          'INSERT INTO user_mappings (uuid, oauth_id, user_id) VALUES ($1::uuid, $2::text, $3::uuid)',
+          [newUuid, token.sub, userId]
+        );
+        userUuid = newUuid;
+        logger.info({ userUuid }, 'Created new user mapping');
+      } catch (error) {
+        logger.error({ error }, 'Failed to create user mapping');
+        throw error;
+      }
     } else {
       userUuid = userMapping[0].uuid;
+      logger.debug({ userUuid }, 'Using existing user mapping');
     }
 
-    // Convert File objects to Buffers
-    const receiptBuffer = Buffer.from(await receiptImage.arrayBuffer());
-    const productBuffer = Buffer.from(await productImage.arrayBuffer());
-
-    // Create base64 strings for Cloudinary
-    const receiptBase64 = `data:${receiptImage.type};base64,${receiptBuffer.toString('base64')}`;
-    const productBase64 = `data:${productImage.type};base64,${productBuffer.toString('base64')}`;
-
-    // Upload images to Cloudinary
-    let receiptUpload, productUpload;
+    // Process images
     try {
-      [receiptUpload, productUpload] = await Promise.all([
+      // Convert File objects to Buffers
+      const receiptBuffer = Buffer.from(await validReceiptImage.arrayBuffer());
+      const productBuffer = Buffer.from(await validProductImage.arrayBuffer());
+
+      // Create base64 strings for Cloudinary
+      const receiptBase64 = `data:${validReceiptImage.type};base64,${receiptBuffer.toString('base64')}`;
+      const productBase64 = `data:${validProductImage.type};base64,${productBuffer.toString('base64')}`;
+
+      logger.debug('Image buffers created successfully');
+
+      // Upload images to Cloudinary
+      const [receiptUpload, productUpload] = await Promise.all([
         cloudinary.uploader.upload(receiptBase64, {
           folder: 'warranty-receipts',
         }),
@@ -64,37 +144,50 @@ export async function POST(req: NextRequest) {
           folder: 'warranty-products',
         }),
       ]);
-    } catch (uploadError) {
-      logger.error({ error: uploadError }, 'Failed to upload images to Cloudinary');
-      return NextResponse.json({ error: 'Failed to upload images' }, { status: 500 });
+
+      logger.info({
+        receiptUrl: receiptUpload.secure_url,
+        productUrl: productUpload.secure_url
+      }, 'Images uploaded to Cloudinary');
+
+      const warrantyId = uuidv4();
+
+      // Store warranty details
+      await query(
+        `INSERT INTO warranties (
+          warranty_id, user_id, product_name, company_name, 
+          purchase_date, expiry_date, additional_info, 
+          receipt_image_url, product_image_url
+        ) VALUES ($1::uuid, $2::uuid, $3, $4, $5::date, $6::date, $7, $8, $9)`,
+        [
+          warrantyId,
+          userUuid,
+          productName,
+          companyName,
+          purchaseDate,
+          expiryDate,
+          additionalInfo || '',
+          receiptUpload.secure_url,
+          productUpload.secure_url,
+        ]
+      );
+
+      logger.info({ warrantyId }, 'Warranty record created successfully');
+      return NextResponse.json({ warrantyId });
+    } catch (error) {
+      logger.error({ 
+        error,
+        stack: error instanceof Error ? error.stack : undefined
+      }, 'Failed to process images or create warranty record');
+      throw error;
     }
-
-    const warrantyId = uuidv4();
-
-    // Store warranty details in PostgreSQL with proper UUID casting
-    await query(
-      `INSERT INTO warranties (
-        warranty_id, user_id, product_name, company_name, 
-        purchase_date, expiry_date, additional_info, 
-        receipt_image_url, product_image_url
-      ) VALUES ($1::uuid, $2::uuid, $3, $4, $5::date, $6::date, $7, $8, $9)`,
-      [
-        warrantyId,
-        userUuid,
-        productName,
-        companyName,
-        purchaseDate,
-        expiryDate,
-        additionalInfo || '',
-        receiptUpload.secure_url,
-        productUpload.secure_url,
-      ]
-    );
-
-    logger.info({ warrantyId, userId: userUuid }, 'Warranty record created successfully');
-    return NextResponse.json({ warrantyId });
   } catch (error) {
-    logger.error({ error }, 'Error processing warranty creation');
+    logger.error({ 
+      error,
+      stack: error instanceof Error ? error.stack : undefined,
+      message: error instanceof Error ? error.message : 'Unknown error'
+    }, 'Error processing warranty creation');
+    
     return NextResponse.json({ 
       error: 'Internal server error',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -106,6 +199,7 @@ export async function GET(req: NextRequest) {
   try {
     const token = await getToken({ req });
     if (!token?.sub) {
+      logger.warn('Unauthorized attempt to fetch warranties');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -116,6 +210,7 @@ export async function GET(req: NextRequest) {
     );
 
     if (userMapping.length === 0) {
+      logger.warn({ oauthId: token.sub }, 'User mapping not found');
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
@@ -131,14 +226,26 @@ export async function GET(req: NextRequest) {
     if (warrantyId) {
       queryText += ' AND warranty_id = $2::uuid';
       queryParams.push(warrantyId);
+      logger.debug({ warrantyId }, 'Fetching specific warranty');
+    } else {
+      logger.debug('Fetching all warranties for user');
     }
 
     const warranties = await query(queryText, queryParams);
 
-    logger.info({ userId: userUuid, warrantyId }, 'Warranties fetched successfully');
+    logger.info({ 
+      userId: userUuid, 
+      warrantyCount: warranties.length 
+    }, 'Warranties fetched successfully');
+    
     return NextResponse.json(warranties);
   } catch (error) {
-    logger.error({ error }, 'Error fetching warranties');
+    logger.error({ 
+      error,
+      stack: error instanceof Error ? error.stack : undefined,
+      message: error instanceof Error ? error.message : 'Unknown error'
+    }, 'Error fetching warranties');
+    
     return NextResponse.json({ 
       error: 'Internal server error',
       details: error instanceof Error ? error.message : 'Unknown error'
