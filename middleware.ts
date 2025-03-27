@@ -10,7 +10,9 @@ export default withAuth(
     if (!token) {
       return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+        },
       });
     }
 
@@ -29,9 +31,16 @@ export default withAuth(
     callbacks: {
       authorized: ({ token }) => !!token,
     },
+    pages: {
+      signIn: '/auth/signin',
+    },
   }
 );
 
+// Update the matcher to be more specific
 export const config = {
-  matcher: ["/api/warranty/:path*"],
+  matcher: [
+    "/api/warranty/:path*",
+    "/api/warranty",
+  ]
 };

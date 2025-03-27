@@ -25,15 +25,7 @@ export async function POST(req: NextRequest) {
     // Log the start of warranty creation
     logger.info({ userId: token.sub }, 'Starting warranty creation process');
 
-    // Ensure the request has the correct content type
-    const contentType = req.headers.get('content-type') || '';
-    if (!contentType.includes('multipart/form-data')) {
-      logger.warn({ contentType }, 'Invalid content type received');
-      return NextResponse.json({ 
-        error: 'Invalid content type. Expected multipart/form-data' 
-      }, { status: 400 });
-    }
-
+    // Parse form data with error handling
     let formData: FormData;
     try {
       formData = await req.formData();
@@ -43,7 +35,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ 
         error: 'Failed to parse form data',
         details: error instanceof Error ? error.message : 'Unknown error'
-      }, { status: 400 });
+      }, { 
+        status: 400,
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
     }
 
     // Validate and extract form fields
@@ -79,7 +76,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ 
         error: 'Validation failed',
         details: validationErrors
-      }, { status: 400 });
+      }, { 
+        status: 400,
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
     }
 
     // After validation, we know these are not null
@@ -173,7 +175,11 @@ export async function POST(req: NextRequest) {
       );
 
       logger.info({ warrantyId }, 'Warranty record created successfully');
-      return NextResponse.json({ warrantyId });
+      return NextResponse.json({ warrantyId }, {
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
     } catch (error) {
       logger.error({ 
         error,
@@ -191,7 +197,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ 
       error: 'Internal server error',
       details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+    }, { 
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
   }
 }
 
@@ -200,7 +211,12 @@ export async function GET(req: NextRequest) {
     const token = await getToken({ req });
     if (!token?.sub) {
       logger.warn('Unauthorized attempt to fetch warranties');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { 
+        status: 401,
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
     }
 
     // Get the user's UUID from the mapping table
@@ -211,7 +227,12 @@ export async function GET(req: NextRequest) {
 
     if (userMapping.length === 0) {
       logger.warn({ oauthId: token.sub }, 'User mapping not found');
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return NextResponse.json({ error: 'User not found' }, { 
+        status: 404,
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
     }
 
     const userUuid = userMapping[0].uuid;
@@ -238,7 +259,11 @@ export async function GET(req: NextRequest) {
       warrantyCount: warranties.length 
     }, 'Warranties fetched successfully');
     
-    return NextResponse.json(warranties);
+    return NextResponse.json(warranties, {
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
   } catch (error) {
     logger.error({ 
       error,
@@ -249,6 +274,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ 
       error: 'Internal server error',
       details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+    }, { 
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
   }
 }
